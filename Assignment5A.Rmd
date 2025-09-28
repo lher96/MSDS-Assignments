@@ -1,0 +1,103 @@
+---
+title: "Assignment 5A"
+output:
+  html_document: default
+  pdf_document: default
+date: "2025-09-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(readr)
+library(tidyverse)
+library(dplyr)
+
+#Create data in a tibble and clean row of na's with dplyr
+
+flights_wide_data <- tribble(
+  ~Airline,   ~Status,    ~`Los Angeles`, ~Phoenix, ~`San Diego`, ~`San Francisco`, ~Seattle,
+  "Alaska",   "On Time",  497,            221,      212,          503,              1841,
+  "Alaska",   "Delayed",  62,             12,       20,           102,              305,
+  NA_character_, NA_character_,  NA_integer_, NA_integer_, NA_integer_,  NA_integer_, NA_integer_,
+  "AM WEST",  "On Time",  694,            4840,     383,          320,              201,
+  "AM WEST",  "Delayed",  117,            415,      65,           129,              61
+)
+
+#removed rows that have completely filled NA values, anything with a single populated value will be kept
+flights_wide <- flights_wide_data %>%
+  filter(!if_all(everything(), is.na))
+
+flights_wide
+write.csv(flights_wide, "flights_wide.csv", row.names = FALSE)
+```
+
+```{r}
+
+flights_wide_gh <- read_csv("https://raw.githubusercontent.com/lher96/MSDS-Assignments/refs/heads/main/flights_wide.csv",
+                            show_col_types = FALSE)
+
+#pivot tibble from wide form to a long 
+flights_long <- flights_wide_gh %>%
+  pivot_longer(cols = c(`Los Angeles`, Phoenix, `San Diego`, `San Francisco`, Seattle),
+               names_to = "City", values_to = "Flights")
+#Make a total and percent on time column in a table
+flights_long_pct<- flights_long %>%
+  group_by(Airline, City) %>%
+  mutate(
+    total_flights = sum(Flights, na.rm = TRUE),
+    pct_on_time   = round(sum(Flights[Status == "On Time"], na.rm = TRUE) / total_flights,2)
+  )%>%
+  ungroup()
+
+flights_long_pct 
+#plot by airline by city and compare the outcomes 
+ggplot(
+  filter(flights_long_pct, Status == "On Time"),         
+  aes(x = City, y = 1 - pct_on_time, fill = Airline)     
+) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(x = "City", y = "% delayed", fill = "Airline",
+       title = "Percent Delayed by Airline by City")+
+  theme_grey()
+
+
+#Here we can see that by city Alaska is always having less delays than AM West. It is also clear that because it is consistent, Alaska must also have a higher rate of on time flights.
+```
+
+```{r}
+flights_long_pct_airline<- flights_long %>%
+  group_by(Airline) %>%
+  mutate(
+    total_flights = sum(Flights, na.rm = TRUE),
+    pct_on_time   = round(sum(Flights[Status == "On Time"], na.rm = TRUE) / total_flights,3)
+  )%>%
+  slice_head(n = 1) %>%               
+  ungroup() %>%
+  select(Airline, total_flights, pct_on_time)
+
+
+flights_long_pct_airline
+
+ggplot(flights_long_pct_airline, aes(x = Airline, y = pct_on_time)) +
+         geom_col() +
+         labs(x= "Airline", y = "On Time Rate")
+#group by airline and city to calculate relative weights for locations. 
+pct_flights_city_alt <- flights_long %>%
+  group_by(Airline, City) %>%
+  summarise(Flights = sum(Flights, na.rm = TRUE), .groups = "drop_last") %>% # stays grouped by Airline
+  mutate(
+    total_airline = sum(Flights, na.rm = TRUE),
+    pct_cit       = round(Flights / total_airline, 2)
+  ) %>%
+  ungroup()
+
+pct_flights_city_alt
+
+#Here we show that having a higher rate of on time flights in every city, AM West has significantly more flights to Phoenix(73%) where they have the highest rate of on time flights at 92%. This weighting is the reason we see that AM West still manages to have a higher rate of on time flights than Alaska since Alaska has 57% of flights going to Seattle at an on time rate of 86%. This phenomenon is known as Simpson's Paradox which shows that a trend can appear in grouped data but when that data is summed up, that trend might not be realized.
+```
+
