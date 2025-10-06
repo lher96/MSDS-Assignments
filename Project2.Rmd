@@ -1,0 +1,175 @@
+---
+title: "project 2"
+output: html_document
+date: "2025-10-06"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(tidyverse)
+#turn every dataset into a csv
+
+store_sales <- tribble(
+  ~Date,        ~Store,   ~ProductA, ~ProductB, ~ProductC,
+  "2024-01-01", "Store1", 50, 30, 20,
+  "2024-01-01", "Store2", 55, 20, 45,
+  "2024-01-02", "Store1", 60, 25, 35,
+  "2024-01-02", "Store2", 65, 35, 50
+)
+
+write_csv(store_sales, "store_sales.csv")
+
+
+flights_wide <- tribble(
+  ~Airline, ~Status, ~`Los Angeles`, ~Phoenix, ~`San Diego`, ~`San Francisco`, ~Seattle,
+  "Alaska", "On Time", 497, 221, 212, 503, 1841,
+  "Alaska", "Delayed", 62, 12, 20, 102, 305,
+  "AM WEST", "On Time", 694, 4840, 383, 320, 201,
+  "AM WEST", "Delayed", 117, 415, 65, 129, 61
+)
+write_csv(flights_wide, "flights.csv")
+
+
+
+
+student_scores <- tribble(
+  ~Student, ~Math_2019, ~Science_2019, ~English_2019, ~Math_2020, ~Science_2020, ~English_2020,
+  "Alice", 85, 90, 78, 88, 92, 81,
+  "Bob",   75, 80, 70, 78, 83, 72,
+  "Carol", 92, 88, 95, 94, 90, 97,
+  "David", 68, 70, 65, 70, 72, 68
+)
+
+write_csv(student_scores, "student_scores.csv")
+
+```
+
+```{r}
+#read csv files
+sales_wide   <- readr::read_csv("store_sales.csv",    show_col_types = FALSE)
+flights_wide <- readr::read_csv("flights.csv",        show_col_types = FALSE)
+scores_wide  <- readr::read_csv("student_scores.csv", show_col_types = FALSE)
+
+# Show tables to confirm
+head(sales_wide)
+head(flights_wide)
+head(scores_wide)
+
+
+```
+
+```{r}
+
+#pivot to create long forms for all datasets
+
+#Store Sales
+sales_long <- sales_wide %>%
+  pivot_longer(
+    cols = starts_with("Product"),
+    names_to = "Product",
+    values_to = "Units"
+  )
+
+# Flights
+flights_long <- flights_wide %>%
+  pivot_longer(
+    cols = -c(Airline, Status),
+    names_to = "City",
+    values_to = "Flights"
+  )
+#Student Scores
+scores_long <- scores_wide %>%
+  pivot_longer(
+    cols = -Student,
+    names_to = "Subject_Year",
+    values_to = "Score"
+  ) %>%
+  tidyr::separate(Subject_Year, into = c("Subject", "Year"), sep = "_", remove = TRUE)
+
+# Show tables
+head(sales_long)
+head(flights_long)
+head(scores_long)
+
+```
+
+```{r}
+#analysis for every dataset
+
+#Store Sales
+sales_avg_by_product <- sales_long %>%
+  group_by(Product) %>%
+  summarise(avg_units = mean(Units), .groups = "drop")
+
+sales_total_by_date_store <- sales_long %>%
+  group_by(Date, Store) %>%
+  summarise(total_units = sum(Units), .groups = "drop")
+
+sales_avg_by_product
+sales_total_by_date_store
+
+#Flights 
+flights_totals <- flights_long %>%
+  group_by(Airline, City) %>%
+  summarise(total_flights = sum(Flights), .groups = "drop")
+
+flights_delay_rate <- flights_long %>%
+  group_by(Airline, City) %>%
+  mutate(total_city_airline = sum(Flights)) %>%
+  ungroup() %>%
+  group_by(Airline, City, Status) %>%
+  summarise(Flights = sum(Flights),
+            total_city_airline = first(total_city_airline),
+            .groups = "drop_last") %>%
+  mutate(pct = Flights / total_city_airline) %>%
+  ungroup() %>%
+  filter(Status == "Delayed") %>%
+  arrange(desc(pct))
+
+flights_totals
+flights_delay_rate
+
+#Student Scores
+scores_avg_subject <- scores_long %>%
+  group_by(Subject) %>%
+  summarise(avg_score = mean(Score), .groups = "drop")
+
+scores_avg_year <- scores_long %>%
+  group_by(Year) %>%
+  summarise(avg_score = mean(Score), .groups = "drop")
+
+scores_avg_subject
+scores_avg_year
+
+
+```
+
+```{r}
+#analysis
+
+# Store Sales product per store/date
+ggplot(sales_long, aes(x = Date, y = Units, fill = Product)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~Store) +
+  labs(title = "Store Sales by Product and Date", y = "Units")
+
+# Flights: delayed
+ggplot(flights_delay_rate, aes(x = reorder(paste(Airline, City, sep = " — "), pct), y = pct)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Delayed Flight Share by Airline & City", x = "Airline — City", y = "Delayed Share")
+
+# Scores across years
+ggplot(scores_long, aes(x = Year, y = Score, group = Subject, color = Subject)) +
+  stat_summary(fun = mean, geom = "line", linewidth = 1) +
+  stat_summary(fun = mean, geom = "point", size = 2) +
+  labs(title = "Average Student Scores by Subject and Year")
+
+```
+
+
+
