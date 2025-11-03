@@ -1,0 +1,173 @@
+---
+title: "NYT Movie Reviews Sentiment Analysis"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(httr2)
+library(jsonlite)
+library(lubridate)
+library(stringr)
+library(purrr)
+library(tidyr)
+library(tibble)
+library(tidytext)  # Added for sentiment analysis
+
+
+readRenviron("projap")
+nyt_key <- Sys.getenv("NYT_API_KEY")
+stopifnot(nchar(nyt_key) > 0)
+```
+
+```{r functions}
+`%or%` <- function(x, y) if (is.null(x) || identical(x, "")) y else x
+
+# Article Search API endpoint
+ARTSEARCH_URL <- "https://api.nytimes.com/svc/search/v2/articlesearch.json"
+
+fetch_movie_reviews_via_articlesearch <- function(from, to, max_pages = 100L, sleep_sec = 6) {
+  from <- as.Date(from); to <- as.Date(to)
+  stopifnot(!is.na(from), !is.na(to), from <= to)
+  
+  key <- trimws(Sys.getenv("NYT_API_KEY"))
+  stopifnot(nzchar(key))
+  
+  # Use keyword search instead of restrictive filters (which failed)
+  begin_date <- format(from, "%Y%m%d")
+  end_date   <- format(to,   "%Y%m%d")
+  
+  out <- list()
+  
+  for (page in 0:(max_pages - 1L)) {
+    message(sprintf("Fetching page %d...", page))
+    
+    req <- httr2::request(ARTSEARCH_URL) |>
+      httr2::req_url_query(
+        `api-key`  = key,
+        q          = "movie review OR film review",  # Keyword search
+        begin_date = begin_date,
+        end_date   = end_date,
+        page       = page
+      ) |>
+      httr2::req_user_agent("MSDS/nyt-articlesearch (httr2)")
+    
+    resp <- httr2::req_perform(req)
+    
+    if (httr2::resp_status(resp) != 200) {
+      msg <- tryCatch(httr2::resp_body_string(resp), error = \(e) "<no body>")
+      stop(sprintf("ArticleSearch failed [%s]\nBody: %s", httr2::resp_status(resp), msg))
+    }
+    
+    js   <- httr2::resp_body_json(resp, simplifyVector = FALSE)
+    docs <- js$response$docs
+    hits <- js$response$meta$hits %||% 0L
+    
+    if (!length(docs)) break
+    
+    # Filter to only Reviews
+    review_docs <- Filter(function(d) {
+      identical(d$type_of_material, "Review")
+    }, docs)
+    
+    if (length(review_docs) > 0) {
+      out[[length(out) + 1L]] <- purrr::map_dfr(review_docs, function(d) {
+        tibble::tibble(
+          id               = d[["_id"]] %or% NA_character_,
+          pub_date         = lubridate::ymd_hms(d$pub_date %or% NA_character_, quiet = TRUE),
+          headline         = d$headline$main %or% NA_character_,
+          byline           = d$byline$original %or% NA_character_,
+          summary_short    = d$abstract %or% d$snippet %or% d$lead_paragraph %or% NA_character_,
+          web_url          = d$web_url %or% NA_character_,
+          section_name     = d$section_name %or% NA_character_,
+          type_of_material = d$type_of_material %or% NA_character_,
+          news_desk        = d$news_desk %or% NA_character_
+        )
+      })
+    }
+    
+    # stop if we've reached or exceeded lim
+    if ((page + 1L) * 10L >= hits) break
+    
+    Sys.sleep(sleep_sec)
+  }
+  
+  res <- dplyr::bind_rows(out)
+  if (!nrow(res)) return(tibble::tibble())
+  
+  # Create consistent column names
+  res |>
+    dplyr::mutate(
+      display_title    = headline,
+      publication_date = as.Date(pub_date),
+      link_url         = web_url
+    ) |>
+    dplyr::distinct(display_title, publication_date, .keep_all = TRUE) |>
+    dplyr::select(display_title, byline, headline, summary_short,
+                  publication_date, link_url, id, pub_date,
+                  section_name, type_of_material, news_desk) |>
+    dplyr::arrange(publication_date, display_title)
+}
+```
+
+```{r fetch-reviews}
+# Fetch movie reviews for 2022 using Article Search API
+reviews_2022 <- fetch_movie_reviews_via_articlesearch(
+  from = "2022-01-01",
+  to = "2022-12-31",
+  max_pages = 10,
+  sleep_sec = 15  # Article Search API rate limit: 10 requests per minute
+)
+
+# Preview 
+glimpse(reviews_2022)
+cat("\nTotal reviews fetched:", nrow(reviews_2022), "\n")
+```
+
+```{r}
+# Words from the short summary
+reviews_words_2022 <- reviews_2022 %>%
+  filter(!is.na(summary_short), nchar(summary_short) > 0) %>%
+  unnest_tokens(word, summary_short) %>%
+  anti_join(stop_words, by = "word")
+
+# Most common words
+cat("\nMost common words in reviews:\n")
+reviews_words_2022 %>% count(word, sort = TRUE) %>% head(20)
+
+# Sentiment analysis using Bing 
+review_sums <- reviews_words_2022 %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(display_title, publication_date, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(
+    sentiment_score = positive - negative,
+    total_sentiment_words = positive + negative
+  ) %>%
+  left_join(
+    reviews_2022 %>% select(display_title, publication_date, summary_short, byline),
+    by = c("display_title", "publication_date")
+  )
+
+
+```
+
+```{r sentiment-summary}
+# Summary statistics
+cat("\nSentiment Analysis Summary:\n")
+cat("Total reviews analyzed:", nrow(review_sums), "\n")
+cat("Mean sentiment score:", mean(review_sums$sentiment_score, na.rm = TRUE), "\n")
+cat("Median sentiment score:", median(review_sums$sentiment_score, na.rm = TRUE), "\n")
+
+# Distribution plot
+ggplot(review_sums, aes(x = sentiment_score)) +
+  geom_histogram(binwidth = 1, fill = "steelblue", color = "white") +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Sentiment Scores for 2022 Movie Reviews",
+    x = "Sentiment Score (Positive - Negative)",
+    y = "Count"
+  )
+```
