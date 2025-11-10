@@ -1,0 +1,153 @@
+---
+title: "Assignment 11 — Scenario Design Analysis of YouTube’s Recommender System"
+author: "Luis A. Hernandez"
+date: "11-09-2025"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Introduction
+
+Scenario Design is a framework that centered around human goals. It asks three main questions "Who are the users? What are their goals? How can the system help them accomplish those goals?". I apply this framework to YouTube, one of the world’s biggest media recommendation platforms.
+
+Unlike Google Search, where the PageRank algorithm evaluates how many links point to a page and how high-quality the links that point to a page are, YouTube does not use PageRank. YouTube's recommender relies on user engagement signals such as watch time, satisfaction surveys, likes, comments, and session duration. The algorithm is designed with a simple goal of keeping the user happy and engaged so they spend more time on the platform. This R Markdown will analyze YouTube’s recommender system from both the user perspective and the organization perspective, attempt to reverse-engineer its inner workings, and provides recommendations to improve the platform going forward.
+
+##Scenario Design — YouTube (User Perspective)
+1. Who are the target users?
+
+YouTube serves a broad set of overlapping user groups:
+-Casual Viewers seeking entertainment or looking to pass time. 
+-Dedicated Fans / Niche Viewers who follow specific creators or genres and routinely check to see updates from an area such as politics or their favorite streamer's universe.
+-Students and curious problem solvers looking for tutorials.
+-Users who may leave music playlists with videos playing in a room or store.
+-People looking for highlights from an event that passed.
+-Business people either looking for a candidate of some sort, or looking to find an unknown talent such as those working for a record label.
+-Young people or toddlers who may be looking for safe content to consume
+
+2. What are the users’ goals?
+
+Users share several common goals:
+
+The user wants videos that fit their taste and mood, while also being entertaining. Many look to find high-quality explanations, instructions, and skill-building content. 
+
+-Often times many will come for various categories to follow their favorite creators, see updates in their interest areas, or find new creators/videos that are interesting and keep one engaged.
+
+-Find new content or new up to date topics from creators who may have similar biases to the user
+
+3. How can the system help them reach those goals?
+
+YouTube can help users through:
+
+-Personalized Ranking using their watch history, engagement patterns, and preferences.
+-Surface-Specific Algorithms that treat Long form content, Shorts, and Searched content differently but still inform one another in some way.
+-User Controls such as “Not interested”, “Don’t recommend channel”, playlist creation, and history settings.
+-Safety Systems that reduce inappropriate or harmful recommendations, as some content is behind an "age wall".
+-Session Awareness to detect and respond to user intent within the different categories.
+
+##Scenario Design — YouTube (Organization Perspective)
+
+1. Who are the internal “users” (stakeholders)?
+
+-Viewers who may have some stake because of dual purpose 
+-Creators who look to attract more attention
+-Advertisers & Brands that are the main drivers of revenue for YouTube
+
+
+2. What are the organization’s goals?
+
+-Viewer Satisfaction & Retention (long sessions and return visits)
+- Maintain a healthy creator ecosystem that grows and monetizes without any controversy
+-Maintain their TOS in a way that makes it easy for institutional users to want to advertise various types of products or services
+- Grow Ad Revenue & Subscriptions to produce more revenue
+
+3. How does the recommender help the organization achieve these goals?
+
+-Having dual objectives such as optimizing and balancing watch time, user satisfaction, and TOS (safety).
+-User personalization that increases usage in both short and long form content with long being the priority funnel.
+-Creator discoverability mechanisms that help new creators still get opportunities to be seen.
+-Safety constraints to maintain compliance with global regulations as they can change depending on location so they must be specific to a user category.
+
+##Reverse-Engineering YouTube’s Recommender
+
+YouTube’s algorithms are proprietary as expected, but several public papers, help docs, and observable behavior reveal a lot about how the reccomedation system works.
+
+
+Key Components:
+-A Two-Stage Deep Learning Architecture
+-Candidate Generation: selects a few hundred potentially relevant videos.
+- ARanking Model that scores those candidates using user and video criteria.
+
+
+Signals Used
+-Users Watch history and video attributes that cause user retention and engagement such as clicks, likes, comments, and shares.
+- Preference options submitted by user such as the “Not interested” or “Don’t recommend channel”, or the regularly asked satisfaction surveys
+- Preferences within topics, keywords, captions, title metadata
+
+
+Important Content Feeds
+
+-Home: broad personalization
+-Up Next: session continuation that will reccomend usually based on the current video eing watched
+-Shorts: ultra-fast swipe-based engagement
+-Search: intent-based ranking
+-Subscriptions Feed: shows videos from subscribed pages and heavily adjacent creators
+
+
+Where Scenario Design Reveals Gaps
+
+Scenario Design highlights some mismatches between user goals and algorithm behavior.
+
+-Recommendation echo chambers caused by watch time driven reinforcement.
+-Long-tail creator invisibility, specifically new channels lacking initial engagement.
+-Limited transparency about why a video is chosen and more importantly, why another would not be.
+-Mood inaccuracy (studying vs. chilling vs. news) that misleads recommendations but can often lead to short time spent on the app. I find this one most important as I am often shown things I like but based on how many times I skip the category, it does not seem there is a great way to find the adjacent category I would like.
+-Extreme responsiveness to previously high volume categories. In a short time if a topic is binged, it does seem to hold a substantial amount of time in it's effect on your feed
+
+Recommendations for Improvement
+1. User Topic Based Viewing Profiles
+
+Allow users to choose between content moods such as Learning, News, Popular Entertainment, or Relaxing / Background Watching. Even perhaps adding a toggle here for age appropriate content.Youtube does well of tracking tendencies and suggesting based on those but this does not do well when I break from my routine of content consumption
+
+2. Increase Transparency & Explanations
+
+-Give direct information on content changes such as:
+Watched 75% of a history_creator's documentary, Based on your interest in category of fitness, Why content previously was not reccomended
+
+3. Exploration Guarantees
+
+A dedicated percentage of recommendation slots towards:
+
+-New creators adjacent to your interests that may not have top popularity channels
+-Niche genres that have strong overlap not just in your broader interests but across them in general
+-Show more long form content from lesser known sources instead of just shorts
+
+4. User Interest Grouping
+
+A dedicated process meant to give you a way to group your content through your own eyes. For example a user may watch several users for politics but one of those users may also present content of a different category. YouTube could create a metric using this that allows users to group their favorite creators based on what type of content they watch for in order to help better solidify what the adjacent creators to suggest may be. I have always found that YouTube is blatantly unaware that I may follow a creator for pizza reviews even though they are a streamer heavily inolved in politics.
+
+##Conclusion
+
+Scenario Design shows that YouTube does a good job helping users find content they like across many areas such as entertainment, learning, news, and updates from their favorite creators, but it also shows clear gaps. The algorithm leans heavily on watch time, reacts too strongly to short-term binges, and doesn’t always understand what “mood” or type of content the user wants at that moment of the day or time of the week. This leads to echo chambers, poor recognition of niche interests, and a lack of understanding about why some videos show up in the feed while others don’t.
+
+Adding clearer explanations, stronger user controls/preferences, better discovery options, and viewing profiles based on content types or moods, YouTube could make the whole experience feel much more personalized and increase use. These changes would help the platform understand why the user is really watching something, not just what they clicked on. It would also help surface new creators, balance long-form and Shorts recommendations, and reduce overreliance on a single binge session. Overall I think if YouTube focused slightly more on obtaining user data by adding features instead of survey, they could improve understanding of what causes consistent usage.
+
+References:
+
+YouTube Help. How YouTube recommendations work (signals, placements, controls).
+https://support.google.com/youtube/answer/16089387
+
+YouTube Help. The algorithm follows the audience (satisfaction focus & signals).
+https://support.google.com/youtube/answer/16533387
+
+YouTube Blog. On YouTube’s recommendation system (principles, Home & Up Next).
+https://blog.youtube/inside-youtube/on-youtubes-recommendation-system/
+
+The Verge. YouTube removing the Trending page; moving to Charts & personalized discovery (recent product shift).
+https://www.theverge.com/news/704222/youtube-trending-page-removal-charts
+
+The Guardian. Teen safety changes in recommendations (policy/safety constraints).
